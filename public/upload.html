@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EFL File Share — Upload</title>
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<div class="topbar">
+  <span class="logo">📦 EFL File Share</span>
+  <span class="portal-tag">⬆️ Upload Portal</span>
+  <span class="spacer"></span>
+  <span class="who" id="who"></span>
+  <button onclick="logout()">Log out</button>
+</div>
+
+<div class="wrap">
+  <div class="card">
+    <h2>Send Excel files</h2>
+    <div class="row" style="align-items:flex-end">
+      <div class="field" style="flex:1;min-width:220px;max-width:340px">
+        <label for="site">① Site</label>
+        <select id="site"></select>
+      </div>
+      <div class="field" style="flex:1;min-width:220px;max-width:340px">
+        <label for="client">② Client</label>
+        <select id="client"></select>
+      </div>
+    </div>
+    <label style="margin-bottom:6px">③ Inbound / Outbound</label>
+    <div class="tabs" id="channelTabs"></div>
+
+    <div class="drop" id="drop">
+      <div class="big">📄</div>
+      <div><b>Drag &amp; drop Excel files here</b> or click to choose</div>
+      <div class="muted small" id="limitsTxt"></div>
+      <input type="file" id="fileInput" multiple hidden>
+    </div>
+
+    <div class="queue" id="queue"></div>
+
+    <div class="field" style="margin-top:12px">
+      <label for="note">Note (optional) — e.g. PO / container / ASN number</label>
+      <input type="text" id="note" maxlength="300" placeholder="e.g. Container MSKU1234567 — ASN 4501">
+    </div>
+
+    <div class="row">
+      <button class="btn" id="sendBtn" disabled>Upload</button>
+      <span class="muted small" id="sendInfo"></span>
+    </div>
+    <div class="progress" id="progress"><div></div></div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <h2 style="margin:0">My uploads</h2>
+      <button class="btn ghost sm" onclick="loadMine()">↻ Refresh</button>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>File</th><th>Site</th><th>Client</th><th>Channel</th><th class="hide-sm">Note</th><th>Uploaded</th><th class="num hide-sm">Size</th><th>Status</th><th></th></tr></thead>
+        <tbody id="mine"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="/assets/app.js"></script>
+<script>
+  let me, channel, queue = [];
+
+  (async () => {
+    me = await requirePortal("uploader");
+    if (!me) return;
+    // ① Site → ② Client (only clients handled at that site) → ③ channel
+    const usable = me.sites.filter(s => s.clients.length);
+    if (!usable.length) {
+      $("#site").innerHTML = `<option value="">No site / client assigned — contact admin</option>`;
+      $("#site").disabled = $("#client").disabled = true; $("#drop").style.display = "none";
+    } else {
+      $("#site").innerHTML = (usable.length > 1 ? `<option value="">— Select site —</option>` : "") +
+        usable.map(s => `<option value="${esc(s.code)}">${esc(s.name)} (${esc(s.code)})</option>`).join("");
+      const lastSite = localStorage.getItem("efl_fs_up_site");
+      if (usable.some(s => s.code === lastSite)) $("#site").value = lastSite;
+      fillClients();
+    }
+    $("#site").onchange = () => { localStorage.setItem("efl_fs_up_site", $("#site").value); fillClients(); };
+    $("#client").onchange = () => { localStorage.setItem("efl_fs_up_client", $("#client").value); updateSendInfo(); };
+    const chans = me.user.channels;
+    channel = chans[0];
+    $("#channelTabs").innerHTML = chans.map(c =>
+      `<button class="tab ${c}" data-c="${c}">${c === "inbound" ? "⬇ Inbound" : "⬆ Outbound"}</button>`).join("");
+    $$("#channelTabs .tab").forEach(t => t.onclick = () => setChannel(t.dataset.c));
+    setChannel(channel);
+    $("#limitsTxt").textContent = `Allowed: ${me.limits.allowedExt.map(e => "." + e).join(", ")} · max ${me.limits.maxMb} MB each · up to 20 files`;
+    loadMine();
+  })();
+
+  function fillClients() {
+    const site = me.sites.find(s => s.code === $("#site").value);
+    const list = site ? me.clients.filter(c => site.clients.includes(c.code)) : [];
+    $("#client").disabled = !site;
+    $("#client").innerHTML = !site ? `<option value="">Select a site first</option>` :
+      (list.length > 1 ? `<option value="">— Select client —</option>` : "") +
+      list.map(c => `<option value="${esc(c.code)}">${esc(c.name)} (${esc(c.code)})</option>`).join("");
+    const last = localStorage.getItem("efl_fs_up_client");
+    if (list.some(c => c.code === last)) $("#client").value = last;
+    updateSendInfo();
+  }
+
+  function setChannel(c) {
+    channel = c;
+    $$("#channelTabs .tab").forEach(t => t.classList.toggle("active", t.dataset.c === c));
+    updateSendInfo();
+  }
+
+  // ---------- picking files ----------
+  const drop = $("#drop"), input = $("#fileInput");
+  drop.onclick = () => input.click();
+  input.onchange = () => { addFiles(input.files); input.value = ""; };
+  ["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("hover"); }));
+  ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("hover"); }));
+  drop.addEventListener("drop", e => addFiles(e.dataTransfer.files));
+
+  function addFiles(list) {
+    for (const f of list) {
+      const ext = (f.name.split(".").pop() || "").toLowerCase();
+      if (!me.limits.allowedExt.includes(ext)) { toast(`${f.name}: file type not allowed`, "error"); continue; }
+      if (f.size > me.limits.maxMb * 1048576) { toast(`${f.name}: larger than ${me.limits.maxMb} MB`, "error"); continue; }
+      if (queue.some(q => q.name === f.name && q.size === f.size)) continue;
+      if (queue.length >= 20) { toast("Maximum 20 files at once", "error"); break; }
+      queue.push(f);
+    }
+    renderQueue();
+  }
+
+  function renderQueue() {
+    $("#queue").innerHTML = queue.map((f, i) =>
+      `<div class="qitem"><span>📗</span><span class="nm">${esc(f.name)}</span><span class="muted small">${fmtSize(f.size)}</span>
+       <button class="btn ghost sm" onclick="queue.splice(${i},1);renderQueue()">✕</button></div>`).join("");
+    $("#sendBtn").disabled = !queue.length;
+    updateSendInfo();
+  }
+
+  function updateSendInfo() {
+    const st = $("#site").value, cl = $("#client").value;
+    $("#sendInfo").innerHTML = queue.length
+      ? `${queue.length} file(s) → <b>${esc(st || "⚠ site")}</b> / <b>${esc(cl || "⚠ client")}</b> / <span class="badge ${channel}">${channel}</span>` : "";
+  }
+
+  // ---------- upload: 1) get signed URLs  2) send each file straight to storage  3) confirm ----------
+  $("#sendBtn").onclick = async () => {
+    if (!queue.length) return;
+    const site = $("#site").value, client = $("#client").value;
+    if (!site) { toast("Please select a site first", "error"); $("#site").focus(); return; }
+    if (!client) { toast("Please select a client first", "error"); $("#client").focus(); return; }
+
+    const btn = $("#sendBtn"), bar = $("#progress"), fill = bar.firstElementChild;
+    const finish = () => { btn.textContent = "Upload"; bar.style.display = "none"; };
+    btn.disabled = true; btn.textContent = "Preparing…"; bar.style.display = "block"; fill.style.width = "0";
+
+    try {
+      const start = await api("/api/upload/start", { method: "POST", body: {
+        site, client, channel, note: $("#note").value, files: queue.map(f => ({ name: f.name, size: f.size })) } });
+
+      const total = queue.reduce((s, f) => s + f.size, 0);
+      const loaded = new Array(queue.length).fill(0);
+      const okIds = [];
+      btn.textContent = "Uploading…";
+
+      for (let i = 0; i < queue.length; i++) {
+        const up = start.uploads[i];
+        try {
+          await putFile(up.signedUrl, queue[i], up.contentType, (n) => {
+            loaded[i] = n; fill.style.width = (loaded.reduce((a, b) => a + b, 0) / total * 100) + "%";
+          });
+          okIds.push(up.id);
+        } catch (e) { toast(`${queue[i].name}: ${e.message}`, "error"); }
+      }
+      if (!okIds.length) throw new Error("No files were uploaded");
+
+      btn.textContent = "Finishing…";
+      const done = await api("/api/upload/complete", { method: "POST", body: { ids: okIds } });
+      toast(`✔ ${done.files.length} file(s) sent to ${done.site} / ${done.client} / ${cap(done.channel)}`, "ok");
+      if (done.failed && done.failed.length) toast(`${done.failed.length} file(s) failed — please retry them`, "error");
+      queue = []; $("#note").value = ""; renderQueue(); loadMine();
+    } catch (e) {
+      toast(e.message || "Upload failed", "error"); btn.disabled = false;
+    } finally { finish(); }
+  };
+
+  // PUT the raw file to the one-time signed URL (goes directly to Supabase Storage)
+  function putFile(url, file, contentType, onProgress) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", url);
+      xhr.setRequestHeader("content-type", contentType || file.type || "application/octet-stream");
+      xhr.setRequestHeader("cache-control", "max-age=3600");
+      xhr.setRequestHeader("x-upsert", "false");
+      xhr.upload.onprogress = e => { if (e.lengthComputable) onProgress(e.loaded); };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) { onProgress(file.size); resolve(); }
+        else { let m = ""; try { m = JSON.parse(xhr.responseText).message || ""; } catch {} reject(new Error(m || `storage error ${xhr.status}`)); }
+      };
+      xhr.onerror = () => reject(new Error("network error"));
+      xhr.send(file);
+    });
+  }
+
+  // ---------- my uploads ----------
+  async function loadMine() {
+    try {
+      const { files } = await api("/api/my-uploads");
+      $("#mine").innerHTML = files.length ? files.map(f => `
+        <tr>
+          <td class="name">📗 ${esc(f.original_name)}</td>
+          <td><span class="client-chip site" title="${esc(f.site_name)}">${esc(f.site_code)}</span></td>
+          <td><span class="client-chip" title="${esc(f.client_name)}">${esc(f.client_code)}</span></td>
+          <td><span class="badge ${f.channel}">${f.channel}</span></td>
+          <td class="hide-sm muted">${esc(f.note || "")}</td>
+          <td title="${fmtDate(f.uploaded_at)}">${fmtDate(f.uploaded_at)}</td>
+          <td class="num hide-sm">${fmtSize(f.size_bytes)}</td>
+          <td>${f.download_count
+              ? `<span class="badge ok" title="Last: ${fmtDate(f.last_downloaded_at)}">Downloaded ×${f.download_count}</span>`
+              : `<span class="badge new">Not yet downloaded</span>`}</td>
+          <td><button class="btn danger sm" onclick="del('${f.id}', this)">Delete</button></td>
+        </tr>`).join("") : `<tr><td colspan="9" class="empty">No uploads yet</td></tr>`;
+    } catch (e) { toast(e.message, "error"); }
+  }
+
+  async function del(id, btn) {
+    if (!confirm("Delete this file? The other side will no longer be able to download it.")) return;
+    btn.disabled = true;
+    try { await api(`/api/my-uploads/${id}`, { method: "DELETE" }); toast("File deleted", "ok"); loadMine(); }
+    catch (e) { toast(e.message, "error"); btn.disabled = false; }
+  }
+
+  setInterval(loadMine, 60000);
+</script>
+</body>
+</html>

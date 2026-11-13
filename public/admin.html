@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EFL File Share — Admin</title>
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<div class="topbar">
+  <span class="logo">📦 EFL File Share</span>
+  <span class="portal-tag">🛠 Admin</span>
+  <span class="spacer"></span>
+  <span class="who" id="who"></span>
+  <button onclick="logout()">Log out</button>
+</div>
+
+<div class="wrap">
+  <div class="tabs" id="mainTabs">
+    <button class="tab neutral" data-v="sites">🏭 Sites</button>
+    <button class="tab neutral" data-v="clients">🏢 Clients</button>
+    <button class="tab neutral active" data-v="uploader">⬆️ Uploader users</button>
+    <button class="tab neutral" data-v="downloader">⬇️ Downloader users</button>
+    <button class="tab neutral" data-v="files">📁 All files</button>
+  </div>
+
+  <!-- Sites view -->
+  <div class="card" id="sitesView" style="display:none">
+    <div class="row" style="justify-content:space-between;margin-bottom:12px">
+      <h2 style="margin:0">Sites (warehouses)</h2>
+      <button class="btn" onclick="openSite()">＋ Add site</button>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Code</th><th>Name</th><th>Clients at this site</th><th>Status</th><th class="num">Files</th><th></th></tr></thead>
+        <tbody id="sites"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Clients view -->
+  <div class="card" id="clientsView" style="display:none">
+    <div class="row" style="justify-content:space-between;margin-bottom:12px">
+      <h2 style="margin:0">Clients</h2>
+      <button class="btn" onclick="openClient()">＋ Add client</button>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Code</th><th>Name</th><th>Status</th><th class="num">Files</th><th></th></tr></thead>
+        <tbody id="clients"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Users view -->
+  <div class="card" id="usersView">
+    <div class="row" style="justify-content:space-between;margin-bottom:12px">
+      <h2 style="margin:0" id="usersTitle"></h2>
+      <button class="btn" onclick="openCreate()">＋ Add user</button>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Name</th><th>Username</th><th>Sites</th><th>Clients</th><th>Channels</th><th>Status</th><th class="hide-sm">Last login</th><th class="num" id="actHead"></th><th></th></tr></thead>
+        <tbody id="users"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Files view -->
+  <div class="card" id="filesView" style="display:none">
+    <div class="row" style="margin-bottom:12px">
+      <select id="fSite" style="width:auto"><option value="">All sites</option></select>
+      <select id="fClient" style="width:auto"><option value="">All clients</option></select>
+      <select id="fChannel" style="width:auto"><option value="">All channels</option><option value="inbound">Inbound</option><option value="outbound">Outbound</option></select>
+      <select id="fDays" style="width:auto"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last year</option></select>
+      <button class="btn ghost sm" onclick="loadFiles()">↻ Refresh</button>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>File</th><th>Site</th><th>Client</th><th>Channel</th><th>Uploaded by</th><th>Uploaded</th><th class="num">Size</th><th>Downloaded by</th><th></th></tr></thead>
+        <tbody id="files"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Create / edit modal -->
+<div class="modal-bg" id="modal">
+  <form class="modal" id="userForm">
+    <h3 id="modalTitle"></h3>
+    <div class="field"><label>Full name</label><input type="text" id="mName" required></div>
+    <div class="field" id="mUserWrap"><label>Username (for login)</label><input type="text" id="mUser" placeholder="e.g. kasun.p"></div>
+    <div class="field"><label id="mPassLbl">Password (min 8 characters)</label><input type="text" id="mPass" autocomplete="new-password"></div>
+    <div class="field">
+      <label>Channels this user can access</label>
+      <div class="checks">
+        <label><input type="checkbox" value="inbound" class="mCh" checked> Inbound</label>
+        <label><input type="checkbox" value="outbound" class="mCh" checked> Outbound</label>
+      </div>
+    </div>
+    <div class="field">
+      <label>Sites this user can access</label>
+      <label class="row" style="gap:6px;color:var(--ink);margin-bottom:6px"><input type="checkbox" id="mAllSites"> All sites (including ones added later)</label>
+      <div class="check-grid" id="mSites"></div>
+    </div>
+    <div class="field">
+      <label>Clients this user can access</label>
+      <label class="row" style="gap:6px;color:var(--ink);margin-bottom:6px"><input type="checkbox" id="mAllClients"> All clients (including ones added later)</label>
+      <div class="check-grid" id="mClients"></div>
+    </div>
+    <div class="field" id="mActiveWrap"><label class="row" style="gap:6px;color:var(--ink)"><input type="checkbox" id="mActive"> Account active</label></div>
+    <div class="row" style="justify-content:flex-end">
+      <button type="button" class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn" id="mSave">Save</button>
+    </div>
+  </form>
+</div>
+
+<!-- Site modal -->
+<div class="modal-bg" id="sModal">
+  <form class="modal" id="siteForm">
+    <h3 id="sTitle"></h3>
+    <div class="field" id="sCodeWrap"><label>Site code (short, permanent — e.g. BIYAGAMA, KATUNAYAKE)</label><input type="text" id="sCode" maxlength="20" style="text-transform:uppercase"></div>
+    <div class="field"><label>Site name</label><input type="text" id="sName" required placeholder="e.g. EFL Biyagama Warehouse"></div>
+    <div class="field">
+      <label>Clients handled at this site</label>
+      <label class="row" style="gap:6px;color:var(--ink);margin-bottom:6px"><input type="checkbox" id="sAllClients"> All clients</label>
+      <div class="check-grid" id="sClients"></div>
+    </div>
+    <div class="field" id="sActiveWrap"><label class="row" style="gap:6px;color:var(--ink)"><input type="checkbox" id="sActive"> Active (shown in upload / download)</label></div>
+    <div class="row" style="justify-content:flex-end">
+      <button type="button" class="btn ghost" onclick="$('#sModal').classList.remove('show')">Cancel</button>
+      <button class="btn">Save</button>
+    </div>
+  </form>
+</div>
+
+<!-- Client modal -->
+<div class="modal-bg" id="cModal">
+  <form class="modal" id="clientForm">
+    <h3 id="cTitle"></h3>
+    <div class="field" id="cCodeWrap"><label>Client code (short, permanent — e.g. DONALDSON, VIP, HAFELE)</label><input type="text" id="cCode" maxlength="20" style="text-transform:uppercase"></div>
+    <div class="field"><label>Client name</label><input type="text" id="cName" required placeholder="e.g. Häfele India"></div>
+    <div class="field" id="cActiveWrap"><label class="row" style="gap:6px;color:var(--ink)"><input type="checkbox" id="cActive"> Active (shown in upload / download)</label></div>
+    <div class="row" style="justify-content:flex-end">
+      <button type="button" class="btn ghost" onclick="$('#cModal').classList.remove('show')">Cancel</button>
+      <button class="btn">Save</button>
+    </div>
+  </form>
+</div>
+
+<script src="/assets/app.js"></script>
+<script>
+  let view = "uploader", users = [], editing = null, clients = [], editingClient = null, sites = [], editingSite = null;
+
+  (async () => {
+    if (!(await requirePortal("admin"))) return;
+    $$("#mainTabs .tab").forEach(t => t.onclick = () => switchView(t.dataset.v));
+    await loadClients(); await loadSites();
+    switchView(!sites.length ? "sites" : clients.length ? "uploader" : "clients");
+    if (!clients.length) toast("Start by adding your clients (Donaldson, VIP, Häfele …)");
+  })();
+
+  function switchView(v) {
+    view = v;
+    $$("#mainTabs .tab").forEach(t => t.classList.toggle("active", t.dataset.v === v));
+    $("#usersView").style.display = (v === "uploader" || v === "downloader") ? "" : "none";
+    $("#filesView").style.display = v === "files" ? "" : "none";
+    $("#clientsView").style.display = v === "clients" ? "" : "none";
+    $("#sitesView").style.display = v === "sites" ? "" : "none";
+    if (v === "files") return loadFiles();
+    if (v === "sites") return loadSites();
+    if (v === "clients") return loadClients();
+    $("#usersTitle").textContent = v === "uploader" ? "Uploader users (send files)" : "Downloader users (receive files)";
+    $("#actHead").textContent = v === "uploader" ? "Files sent" : "Downloads";
+    loadUsers();
+  }
+
+  async function loadUsers() {
+    try {
+      ({ users } = await api(`/api/admin/users?type=${view}`));
+      $("#users").innerHTML = users.length ? users.map(u => `
+        <tr>
+          <td class="name">${esc(u.full_name)}</td>
+          <td>${esc(u.username)}</td>
+          <td>${clientChips(u.sites, "site")}</td>
+          <td>${clientChips(u.clients)}</td>
+          <td>${u.channels.split(",").filter(Boolean).map(c => `<span class="badge ${c}">${c}</span>`).join(" ")}</td>
+          <td>${u.is_active ? '<span class="badge ok">Active</span>' : '<span class="badge off">Disabled</span>'}</td>
+          <td class="hide-sm">${u.last_login_at ? timeAgo(u.last_login_at) : "never"}</td>
+          <td class="num">${u.activity_count}</td>
+          <td class="num"><button class="btn ghost sm" onclick="openEdit(${u.id})">Edit</button></td>
+        </tr>`).join("") : `<tr><td colspan="9" class="empty">No users yet — click “Add user”</td></tr>`;
+    } catch (e) { toast(e.message, "error"); }
+  }
+
+  function openCreate() {
+    editing = null;
+    $("#modalTitle").textContent = `New ${view}`;
+    $("#mName").value = ""; $("#mUser").value = ""; $("#mPass").value = genPass();
+    $("#mUserWrap").style.display = ""; $("#mActiveWrap").style.display = "none";
+    $("#mPassLbl").textContent = "Password (min 8 characters) — copy & give to the user";
+    $$(".mCh").forEach(c => c.checked = true);
+    setClientChecks(""); setSiteChecks("");
+    $("#modal").classList.add("show"); $("#mName").focus();
+  }
+
+  function openEdit(id) {
+    editing = users.find(u => u.id === id);
+    $("#modalTitle").textContent = `Edit ${view}: ${editing.username}`;
+    $("#mName").value = editing.full_name; $("#mPass").value = "";
+    $("#mUserWrap").style.display = "none"; $("#mActiveWrap").style.display = "";
+    $("#mPassLbl").textContent = "New password (leave blank to keep current)";
+    $("#mActive").checked = !!editing.is_active;
+    const ch = editing.channels.split(",");
+    $$(".mCh").forEach(c => c.checked = ch.includes(c.value));
+    setClientChecks(editing.clients); setSiteChecks(editing.sites);
+    $("#modal").classList.add("show");
+  }
+
+  function closeModal() { $("#modal").classList.remove("show"); }
+  $("#modal").onclick = e => { if (e.target.id === "modal") closeModal(); };
+
+  $("#userForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const channels = $$(".mCh").filter(c => c.checked).map(c => c.value);
+    const clientSel = $("#mAllClients").checked ? ["*"] : $$(".mCl").filter(c => c.checked).map(c => c.value);
+    const siteSel = $("#mAllSites").checked ? ["*"] : $$(".mSt").filter(c => c.checked).map(c => c.value);
+    try {
+      if (!editing) {
+        await api("/api/admin/users", { method: "POST", body: {
+          type: view, full_name: $("#mName").value, username: $("#mUser").value, password: $("#mPass").value, channels, clients: clientSel, sites: siteSel } });
+        toast(`User created — password: ${$("#mPass").value}`, "ok");
+      } else {
+        const body = { full_name: $("#mName").value, channels, clients: clientSel, sites: siteSel, is_active: $("#mActive").checked };
+        if ($("#mPass").value) body.password = $("#mPass").value;
+        await api(`/api/admin/users/${view}/${editing.id}`, { method: "PATCH", body });
+        toast("Saved", "ok");
+      }
+      closeModal(); loadUsers();
+    } catch (err) { toast(err.message, "error"); }
+  };
+
+  function genPass() {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+    return [...crypto.getRandomValues(new Uint8Array(10))].map(b => chars[b % chars.length]).join("");
+  }
+
+  // ---------- files ----------
+  $("#fChannel").onchange = loadFiles; $("#fDays").onchange = loadFiles; $("#fClient").onchange = loadFiles; $("#fSite").onchange = loadFiles;
+  async function loadFiles() {
+    try {
+      const p = new URLSearchParams({ site: $("#fSite").value, client: $("#fClient").value, channel: $("#fChannel").value, days: $("#fDays").value });
+      const { files } = await api("/api/admin/files?" + p);
+      $("#files").innerHTML = files.length ? files.map(f => `
+        <tr>
+          <td class="name">📗 ${esc(f.original_name)}${f.note ? `<div class="muted small">${esc(f.note)}</div>` : ""}</td>
+          <td><span class="client-chip site" title="${esc(f.site_name)}">${esc(f.site_code)}</span></td>
+          <td><span class="client-chip" title="${esc(f.client_name)}">${esc(f.client_code)}</span></td>
+          <td><span class="badge ${f.channel}">${f.channel}</span></td>
+          <td>${esc(f.uploaded_by)}</td>
+          <td>${fmtDate(f.uploaded_at)}</td>
+          <td class="num">${fmtSize(f.size_bytes)}</td>
+          <td>${f.download_count ? esc(f.downloaded_by) + ` <span class="muted small">(×${f.download_count})</span>` : '<span class="badge new">Not downloaded</span>'}</td>
+          <td><button class="btn danger sm" onclick="delFile('${f.id}', this)">Delete</button></td>
+        </tr>`).join("") : `<tr><td colspan="9" class="empty">No files in this period</td></tr>`;
+    } catch (e) { toast(e.message, "error"); }
+  }
+
+  // ---------- clients ----------
+  async function loadClients() {
+    try {
+      ({ clients } = await api("/api/admin/clients"));
+      $("#clients").innerHTML = clients.length ? clients.map(c => `
+        <tr>
+          <td><span class="client-chip">${esc(c.code)}</span></td>
+          <td class="name">${esc(c.name)}</td>
+          <td>${c.is_active ? '<span class="badge ok">Active</span>' : '<span class="badge off">Disabled</span>'}</td>
+          <td class="num">${c.file_count}</td>
+          <td class="num"><button class="btn ghost sm" onclick="openClient('${esc(c.code)}')">Edit</button></td>
+        </tr>`).join("") : `<tr><td colspan="5" class="empty">No clients yet — click “Add client”</td></tr>`;
+      const cur = $("#fClient").value;
+      $("#fClient").innerHTML = `<option value="">All clients</option>` +
+        clients.map(c => `<option value="${esc(c.code)}">${esc(c.name)}</option>`).join("");
+      $("#fClient").value = cur;
+    } catch (e) { toast(e.message, "error"); }
+  }
+
+  function openClient(code) {
+    editingClient = code ? clients.find(c => c.code === code) : null;
+    $("#cTitle").textContent = editingClient ? `Edit client: ${editingClient.code}` : "New client";
+    $("#cCodeWrap").style.display = editingClient ? "none" : "";
+    $("#cActiveWrap").style.display = editingClient ? "" : "none";
+    $("#cCode").value = ""; $("#cName").value = editingClient ? editingClient.name : "";
+    $("#cActive").checked = editingClient ? !!editingClient.is_active : true;
+    $("#cModal").classList.add("show"); (editingClient ? $("#cName") : $("#cCode")).focus();
+  }
+  $("#cModal").onclick = e => { if (e.target.id === "cModal") $("#cModal").classList.remove("show"); };
+
+  $("#clientForm").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingClient) {
+        await api(`/api/admin/clients/${encodeURIComponent(editingClient.code)}`, { method: "PATCH", body: { name: $("#cName").value, is_active: $("#cActive").checked } });
+      } else {
+        await api("/api/admin/clients", { method: "POST", body: { code: $("#cCode").value, name: $("#cName").value } });
+      }
+      toast("Client saved", "ok");
+      $("#cModal").classList.remove("show"); loadClients();
+    } catch (err) { toast(err.message, "error"); }
+  };
+
+  function clientChips(s, kind = "") {
+    if (s === "*") return `<span class="client-chip ${kind}">ALL</span>`;
+    const codes = String(s || "").split(",").filter(Boolean);
+    return codes.length ? codes.map(c => `<span class="client-chip ${kind}">${esc(c)}</span>`).join(" ") : '<span class="badge off">none</span>';
+  }
+
+  // ---------- sites ----------
+  async function loadSites() {
+    try {
+      ({ sites } = await api("/api/admin/sites"));
+      $("#sites").innerHTML = sites.length ? sites.map(s => `
+        <tr>
+          <td><span class="client-chip site">${esc(s.code)}</span></td>
+          <td class="name">${esc(s.name)}</td>
+          <td>${clientChips(s.clients)}</td>
+          <td>${s.is_active ? '<span class="badge ok">Active</span>' : '<span class="badge off">Disabled</span>'}</td>
+          <td class="num">${s.file_count}</td>
+          <td class="num"><button class="btn ghost sm" onclick="openSite('${esc(s.code)}')">Edit</button></td>
+        </tr>`).join("") : `<tr><td colspan="6" class="empty">No sites yet — click “Add site”</td></tr>`;
+      const cur = $("#fSite").value;
+      $("#fSite").innerHTML = `<option value="">All sites</option>` + sites.map(s => `<option value="${esc(s.code)}">${esc(s.name)}</option>`).join("");
+      $("#fSite").value = cur;
+    } catch (e) { toast(e.message, "error"); }
+  }
+
+  function openSite(code) {
+    editingSite = code ? sites.find(s => s.code === code) : null;
+    $("#sTitle").textContent = editingSite ? `Edit site: ${editingSite.code}` : "New site";
+    $("#sCodeWrap").style.display = editingSite ? "none" : "";
+    $("#sActiveWrap").style.display = editingSite ? "" : "none";
+    $("#sCode").value = ""; $("#sName").value = editingSite ? editingSite.name : "";
+    $("#sActive").checked = editingSite ? !!editingSite.is_active : true;
+    const sel = editingSite ? editingSite.clients : "*";
+    renderChecks("#sClients", "sCl", clients, sel, "#sAllClients");
+    $("#sModal").classList.add("show"); (editingSite ? $("#sName") : $("#sCode")).focus();
+  }
+  $("#sModal").onclick = e => { if (e.target.id === "sModal") $("#sModal").classList.remove("show"); };
+
+  $("#siteForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const cl = $("#sAllClients").checked ? ["*"] : $$(".sCl").filter(c => c.checked).map(c => c.value);
+    try {
+      if (editingSite) {
+        await api(`/api/admin/sites/${encodeURIComponent(editingSite.code)}`, { method: "PATCH", body: { name: $("#sName").value, clients: cl, is_active: $("#sActive").checked } });
+      } else {
+        await api("/api/admin/sites", { method: "POST", body: { code: $("#sCode").value, name: $("#sName").value, clients: cl } });
+      }
+      toast("Site saved", "ok");
+      $("#sModal").classList.remove("show"); loadSites();
+    } catch (err) { toast(err.message, "error"); }
+  };
+
+  // generic checkbox grid with an "All" toggle
+  function renderChecks(gridSel, cls, items, selected, allSel) {
+    const all = selected === "*", sel = String(selected || "").split(",");
+    $(gridSel).innerHTML = items.length ? items.map(i =>
+      `<label><input type="checkbox" class="${cls}" value="${esc(i.code)}" ${all || sel.includes(i.code) ? "checked" : ""}> ${esc(i.name)}${i.is_active ? "" : " (disabled)"}</label>`).join("")
+      : '<span class="muted small">Nothing yet — add them in their tab first</span>';
+    $(allSel).checked = all;
+    const sync = () => { const a = $(allSel).checked; $$("." + cls).forEach(c => { c.disabled = a; if (a) c.checked = true; }); };
+    $(allSel).onchange = sync; sync();
+  }
+  function setSiteChecks(s) { renderChecks("#mSites", "mSt", sites, s, "#mAllSites"); }
+
+  function setClientChecks(s) {
+    const all = s === "*", sel = String(s || "").split(",");
+    $("#mClients").innerHTML = clients.length ? clients.map(c =>
+      `<label><input type="checkbox" class="mCl" value="${esc(c.code)}" ${all || sel.includes(c.code) ? "checked" : ""}> ${esc(c.name)}${c.is_active ? "" : " (disabled)"}</label>`).join("")
+      : '<span class="muted small">No clients yet — add them in the Clients tab first</span>';
+    $("#mAllClients").checked = all;
+    toggleAllClients();
+  }
+  function toggleAllClients() {
+    const all = $("#mAllClients").checked;
+    $$(".mCl").forEach(c => { c.disabled = all; if (all) c.checked = true; });
+  }
+  $("#mAllClients").onchange = toggleAllClients;
+
+  async function delFile(id, btn) {
+    if (!confirm("Permanently delete this file?")) return;
+    btn.disabled = true;
+    try { await api(`/api/admin/files/${id}`, { method: "DELETE" }); toast("Deleted", "ok"); loadFiles(); }
+    catch (e) { toast(e.message, "error"); btn.disabled = false; }
+  }
+</script>
+</body>
+</html>

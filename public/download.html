@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EFL File Share — Download</title>
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<div class="topbar">
+  <span class="logo">📦 EFL File Share</span>
+  <span class="portal-tag">⬇️ Download Portal</span>
+  <span class="spacer"></span>
+  <span class="who" id="who"></span>
+  <button onclick="logout()">Log out</button>
+</div>
+
+<div class="wrap">
+  <div class="card">
+    <div class="client-bar site-bar" id="siteBar"></div>
+    <div class="client-bar" id="clientBar"></div>
+    <div class="tabs" id="channelTabs"></div>
+
+    <div class="row" style="margin-bottom:14px">
+      <div style="flex:1;min-width:200px"><input type="search" id="q" placeholder="Search file name, note, uploader…"></div>
+      <select id="days" style="width:auto">
+        <option value="1">Today</option>
+        <option value="7">Last 7 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="365">Last year</option>
+      </select>
+      <label class="row small" style="gap:6px;margin:0;color:var(--ink)"><input type="checkbox" id="onlyNew"> Only new</label>
+      <button class="btn ghost sm" onclick="load()">↻ Refresh</button>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>File</th><th>Site</th><th>Client</th><th class="hide-sm">Note</th><th class="hide-sm">From</th><th>Uploaded</th><th class="num hide-sm">Size</th><th></th></tr></thead>
+        <tbody id="list"><tr><td colspan="8" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="muted small" style="margin-top:10px" id="foot"></div>
+  </div>
+</div>
+
+<script src="/assets/app.js"></script>
+<script>
+  let me, channel, site = "", client = "", files = [], timer;
+
+  (async () => {
+    me = await requirePortal("downloader");
+    if (!me) return;
+    me.sites = me.sites.filter(s => s.clients.length);
+    if (!me.clients.length || !me.sites.length) {
+      $("#list").innerHTML = `<tr><td colspan="8" class="empty">No site / client assigned to your account — contact admin</td></tr>`;
+      return;
+    }
+    // ① Site bar (hidden when the user has only one site)
+    site = localStorage.getItem("efl_fs_dl_site") || "";
+    if (site && !me.sites.some(s => s.code === site)) site = "";
+    if (me.sites.length === 1) site = me.sites[0].code;
+    $("#siteBar").style.display = me.sites.length > 1 ? "" : "none";
+    $("#siteBar").innerHTML = `<button data-st="">🏭 All sites<span class="count" id="scnt-"></span></button>` +
+      me.sites.map(s => `<button data-st="${esc(s.code)}" title="${esc(s.name)}">🏭 ${esc(s.name)}<span class="count" id="scnt-${esc(s.code)}"></span></button>`).join("");
+    $$("#siteBar button").forEach(b => b.onclick = () => { site = b.dataset.st; localStorage.setItem("efl_fs_dl_site", site); buildClientBar(); load(); refreshCounts(); });
+    // ② Client bar (clients handled at the chosen site)
+    client = localStorage.getItem("efl_fs_dl_client") || "";
+    buildClientBar();
+    const chans = me.user.channels;
+    channel = localStorage.getItem("efl_fs_dl_channel");
+    if (!chans.includes(channel)) channel = chans[0];
+    $("#channelTabs").innerHTML = chans.map(c =>
+      `<button class="tab ${c}" data-c="${c}">${c === "inbound" ? "⬇ Inbound" : "⬆ Outbound"}<span class="count" id="cnt-${c}"></span></button>`).join("");
+    $$("#channelTabs .tab").forEach(t => t.onclick = () => { channel = t.dataset.c; localStorage.setItem("efl_fs_dl_channel", channel); load(); });
+    load();
+    refreshCounts();
+    setInterval(() => { load(true); refreshCounts(); }, 60000);
+  })();
+
+  function buildClientBar() {
+    const s = me.sites.find(x => x.code === site);
+    const allowed = s ? s.clients : [...new Set(me.sites.flatMap(x => x.clients))];
+    const list = me.clients.filter(c => allowed.includes(c.code));
+    if (client && !list.some(c => c.code === client)) client = "";
+    if (list.length === 1) client = list[0].code;
+    $("#clientBar").innerHTML = (list.length > 1 ? `<button data-cl="">All clients<span class="count" id="ccnt-"></span></button>` : "") +
+      list.map(c => `<button data-cl="${esc(c.code)}" title="${esc(c.name)}">${esc(c.name)}<span class="count" id="ccnt-${esc(c.code)}"></span></button>`).join("");
+    $$("#clientBar button").forEach(b => b.onclick = () => { client = b.dataset.cl; localStorage.setItem("efl_fs_dl_client", client); load(); refreshCounts(); });
+  }
+
+  $("#q").oninput = () => { clearTimeout(timer); timer = setTimeout(load, 300); };
+  $("#days").onchange = () => load();
+  $("#onlyNew").onchange = render;
+
+  async function load(silent) {
+    $$("#channelTabs .tab").forEach(t => t.classList.toggle("active", t.dataset.c === channel));
+    $$("#clientBar button").forEach(b => b.classList.toggle("active", b.dataset.cl === client));
+    $$("#siteBar button").forEach(b => b.classList.toggle("active", b.dataset.st === site));
+    const params = new URLSearchParams({ site, client, channel, days: $("#days").value, q: $("#q").value.trim() });
+    try {
+      const data = await api("/api/files?" + params);
+      files = data.files;
+      render();
+    } catch (e) { if (!silent) toast(e.message, "error"); }
+  }
+
+  // "new" badges: per site, per client (inside the chosen site), per channel (chosen site + client)
+  async function refreshCounts() {
+    const perSite = {}, perClient = {}, perChannel = {};
+    const inc = (o, k) => (o[k] = (o[k] || 0) + 1);
+    for (const c of me.user.channels) {
+      try {
+        const { files } = await api(`/api/files?channel=${c}&days=30`);
+        const fresh = files.filter(f => !f.my_last_download);
+        fresh.forEach(f => { inc(perSite, f.site_code); inc(perSite, ""); });
+        const inSite = fresh.filter(f => !site || f.site_code === site);
+        inSite.forEach(f => { inc(perClient, f.client_code); inc(perClient, ""); });
+        perChannel[c] = inSite.filter(f => !client || f.client_code === client).length;
+      } catch {}
+    }
+    me.user.channels.forEach(c => { const el = $("#cnt-" + c); if (el) el.textContent = perChannel[c] ? perChannel[c] + " new" : ""; });
+    $$("#siteBar .count").forEach(el => { el.textContent = perSite[el.id.slice(5)] || ""; });
+    $$("#clientBar .count").forEach(el => { el.textContent = perClient[el.id.slice(5)] || ""; });
+  }
+
+  function render() {
+    const rows = $("#onlyNew").checked ? files.filter(f => !f.my_last_download) : files;
+    $("#list").innerHTML = rows.length ? rows.map(f => `
+      <tr>
+        <td class="name">📗 ${esc(f.original_name)} ${f.my_last_download ? "" : '<span class="badge new">New</span>'}</td>
+        <td><span class="client-chip site" title="${esc(f.site_name)}">${esc(f.site_code)}</span></td>
+        <td><span class="client-chip" title="${esc(f.client_name)}">${esc(f.client_code)}</span></td>
+        <td class="hide-sm muted">${esc(f.note || "")}</td>
+        <td class="hide-sm">${esc(f.uploaded_by)}</td>
+        <td><div>${fmtDate(f.uploaded_at)}</div><div class="muted small">${timeAgo(f.uploaded_at)}</div></td>
+        <td class="num hide-sm">${fmtSize(f.size_bytes)}</td>
+        <td class="num">
+          <button class="btn sm" onclick="dl('${f.id}')">⬇ Download</button>
+          ${f.my_last_download ? `<div class="muted small" title="${fmtDate(f.my_last_download)}">you: ${timeAgo(f.my_last_download)}</div>` : ""}
+        </td>
+      </tr>`).join("") : `<tr><td colspan="8" class="empty">No ${[site, client].filter(Boolean).join(" / ")} ${channel} files${$("#onlyNew").checked ? " that are new" : ""} in this period</td></tr>`;
+    const newCount = files.filter(f => !f.my_last_download).length;
+    $("#foot").textContent = `${files.length} file(s) · ${newCount} not downloaded by you · auto-refresh every 60s`;
+  }
+
+  function dl(id) {
+    // Plain navigation lets the browser handle the attachment download natively
+    const a = document.createElement("a");
+    a.href = `/api/files/${id}/download`;
+    a.rel = "noopener";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => { load(true); refreshCounts(); }, 1500);
+  }
+</script>
+</body>
+</html>
