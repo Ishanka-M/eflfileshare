@@ -219,7 +219,6 @@
   }
 
   function closeModal() { $("#modal").classList.remove("show"); }
-  $("#modal").onclick = e => { if (e.target.id === "modal") closeModal(); };
 
   $("#userForm").onsubmit = async (e) => {
     e.preventDefault();
@@ -295,7 +294,6 @@
     $("#cActive").checked = editingClient ? !!editingClient.is_active : true;
     $("#cModal").classList.add("show"); (editingClient ? $("#cName") : $("#cCode")).focus();
   }
-  $("#cModal").onclick = e => { if (e.target.id === "cModal") $("#cModal").classList.remove("show"); };
 
   $("#clientForm").onsubmit = async (e) => {
     e.preventDefault();
@@ -346,7 +344,6 @@
     renderChecks("#sClients", "sCl", clients, sel, "#sAllClients");
     $("#sModal").classList.add("show"); (editingSite ? $("#sName") : $("#sCode")).focus();
   }
-  $("#sModal").onclick = e => { if (e.target.id === "sModal") $("#sModal").classList.remove("show"); };
 
   $("#siteForm").onsubmit = async (e) => {
     e.preventDefault();
