@@ -1,0 +1,32 @@
+# ─────────────────────────────────────────────────────────────────────────
+# OPTIONAL — only for local testing / CLI deploys.
+# The normal setup (README) uses the Cloudflare Dashboard for bindings,
+# so this file is NOT needed in GitHub. To use it locally:
+#   cp wrangler.toml.example wrangler.toml   (then fill database_id)
+# ─────────────────────────────────────────────────────────────────────────
+name = "efl-fileshare"
+compatibility_date = "2025-09-01"
+pages_build_output_dir = "public"
+
+# ---- D1 database (users, sessions, file list, download log) ----
+# Create with:  npx wrangler d1 create efl-fileshare-db
+# then paste the database_id it prints below.
+[[d1_databases]]
+binding = "DB"
+database_name = "efl-fileshare-db"
+database_id = "PASTE-YOUR-D1-DATABASE-ID-HERE"
+
+# ---- R2 bucket (the actual Excel files) ----
+# Create with:  npx wrangler r2 bucket create efl-fileshare-files
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "efl-fileshare-files"
+
+[vars]
+MAX_FILE_MB = "25"
+ALLOWED_EXT = "xlsx,xls,xlsm,csv"
+SESSION_HOURS = "12"
+
+# ADMIN_PASSWORD is a SECRET — do NOT put it here.
+# Set it in Cloudflare Dashboard → your Pages project → Settings → Variables and Secrets
+# (type: Secret), or:  npx wrangler pages secret put ADMIN_PASSWORD

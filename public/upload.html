@@ -149,64 +149,39 @@
       ? `${queue.length} file(s) → <b>${esc(st || "⚠ site")}</b> / <b>${esc(cl || "⚠ client")}</b> / <span class="badge ${channel}">${channel}</span>` : "";
   }
 
-  // ---------- upload: 1) get signed URLs  2) send each file straight to storage  3) confirm ----------
-  $("#sendBtn").onclick = async () => {
+  // ---------- upload with progress ----------
+  $("#sendBtn").onclick = () => {
     if (!queue.length) return;
     const site = $("#site").value, client = $("#client").value;
     if (!site) { toast("Please select a site first", "error"); $("#site").focus(); return; }
     if (!client) { toast("Please select a client first", "error"); $("#client").focus(); return; }
+    const fd = new FormData();
+    fd.append("site", site);
+    fd.append("client", client);
+    fd.append("channel", channel);
+    fd.append("note", $("#note").value);
+    queue.forEach(f => fd.append("file", f, f.name));
 
     const btn = $("#sendBtn"), bar = $("#progress"), fill = bar.firstElementChild;
-    const finish = () => { btn.textContent = "Upload"; bar.style.display = "none"; };
-    btn.disabled = true; btn.textContent = "Preparing…"; bar.style.display = "block"; fill.style.width = "0";
+    btn.disabled = true; btn.textContent = "Uploading…"; bar.style.display = "block"; fill.style.width = "0";
 
-    try {
-      const start = await api("/api/upload/start", { method: "POST", body: {
-        site, client, channel, note: $("#note").value, files: queue.map(f => ({ name: f.name, size: f.size })) } });
-
-      const total = queue.reduce((s, f) => s + f.size, 0);
-      const loaded = new Array(queue.length).fill(0);
-      const okIds = [];
-      btn.textContent = "Uploading…";
-
-      for (let i = 0; i < queue.length; i++) {
-        const up = start.uploads[i];
-        try {
-          await putFile(up.signedUrl, queue[i], up.contentType, (n) => {
-            loaded[i] = n; fill.style.width = (loaded.reduce((a, b) => a + b, 0) / total * 100) + "%";
-          });
-          okIds.push(up.id);
-        } catch (e) { toast(`${queue[i].name}: ${e.message}`, "error"); }
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/upload");
+    xhr.upload.onprogress = e => { if (e.lengthComputable) fill.style.width = (e.loaded / e.total * 100) + "%"; };
+    xhr.onload = () => {
+      let data = {}; try { data = JSON.parse(xhr.responseText); } catch {}
+      btn.textContent = "Upload"; bar.style.display = "none";
+      if (xhr.status === 401) return location.href = "/";
+      if (xhr.status >= 200 && xhr.status < 300 && data.ok) {
+        toast(`✔ ${data.files.length} file(s) sent to ${data.site} / ${data.client} / ${cap(data.channel)}`, "ok");
+        queue = []; $("#note").value = ""; renderQueue(); loadMine();
+      } else {
+        toast(data.error || "Upload failed", "error"); btn.disabled = false;
       }
-      if (!okIds.length) throw new Error("No files were uploaded");
-
-      btn.textContent = "Finishing…";
-      const done = await api("/api/upload/complete", { method: "POST", body: { ids: okIds } });
-      toast(`✔ ${done.files.length} file(s) sent to ${done.site} / ${done.client} / ${cap(done.channel)}`, "ok");
-      if (done.failed && done.failed.length) toast(`${done.failed.length} file(s) failed — please retry them`, "error");
-      queue = []; $("#note").value = ""; renderQueue(); loadMine();
-    } catch (e) {
-      toast(e.message || "Upload failed", "error"); btn.disabled = false;
-    } finally { finish(); }
+    };
+    xhr.onerror = () => { toast("Network error — upload failed", "error"); btn.disabled = false; btn.textContent = "Upload"; bar.style.display = "none"; };
+    xhr.send(fd);
   };
-
-  // PUT the raw file to the one-time signed URL (goes directly to Supabase Storage)
-  function putFile(url, file, contentType, onProgress) {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("PUT", url);
-      xhr.setRequestHeader("content-type", contentType || file.type || "application/octet-stream");
-      xhr.setRequestHeader("cache-control", "max-age=3600");
-      xhr.setRequestHeader("x-upsert", "false");
-      xhr.upload.onprogress = e => { if (e.lengthComputable) onProgress(e.loaded); };
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) { onProgress(file.size); resolve(); }
-        else { let m = ""; try { m = JSON.parse(xhr.responseText).message || ""; } catch {} reject(new Error(m || `storage error ${xhr.status}`)); }
-      };
-      xhr.onerror = () => reject(new Error("network error"));
-      xhr.send(file);
-    });
-  }
 
   // ---------- my uploads ----------
   async function loadMine() {
