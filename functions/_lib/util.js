@@ -126,3 +126,22 @@ export const contentDisposition = (name) => {
   const ascii = name.replace(/[^\x20-\x7e]/g, "_").replace(/"/g, "'");
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`;
 };
+
+// Remove one code from a "A,B,C" list ("*" stays "*")
+export const removeCode = (list, code) => {
+  const v = String(list || "").trim();
+  if (v === "*") return v;
+  const c = String(code).toUpperCase();
+  return v.split(",").map((x) => x.trim()).filter((x) => x && x.toUpperCase() !== c).join(",");
+};
+
+// Statements that strip `code` from a code-list column in a table (e.g. users' sites)
+export async function stripCodeStatements(env, table, column, code) {
+  const { results } = await env.DB.prepare(
+    `SELECT rowid AS rid, ${column} AS v FROM ${table} WHERE (',' || ${column} || ',') LIKE ?`
+  ).bind(`%,${code},%`).all();
+  return results
+    .map((r) => ({ rid: r.rid, nv: removeCode(r.v, code), ov: r.v }))
+    .filter((r) => r.nv !== r.ov)
+    .map((r) => env.DB.prepare(`UPDATE ${table} SET ${column} = ? WHERE rowid = ?`).bind(r.nv, r.rid));
+}

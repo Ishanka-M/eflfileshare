@@ -23,8 +23,18 @@ async function requirePortal(type) {
     if (!me.user || me.user.type !== type) { location.href = "/"; return null; }
     const who = $("#who");
     if (who) who.textContent = me.user.full_name + (me.user.type !== "admin" ? ` (${me.user.username})` : "");
+    const sw = $("#switchBtn");
+    if (sw && me.switch_to) { sw.textContent = me.switch_to === "uploader" ? "⇄ Upload Portal" : "⇄ Download Portal"; sw.style.display = ""; }
     return me;
   } catch { location.href = "/"; return null; }
+}
+
+// "Both" users: jump to the other portal without logging in again
+async function switchPortal() {
+  try {
+    const r = await api("/api/auth/switch", { method: "POST" });
+    location.href = r.portal === "uploader" ? "/upload.html" : "/download.html";
+  } catch (e) { toast(e.message, "error"); }
 }
 
 async function logout() {

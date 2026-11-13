@@ -112,14 +112,19 @@ Upload කරන අයට සහ Download කරන අයට **වෙන ව�
 2. **🏢 Clients** — අවශ්‍ය clients add/edit කරන්න (code එක permanent, උදා `DONALDSON`)
 3. **🏭 Sites** — warehouses add කරන්න (උදා `BIYAGAMA` – EFL Biyagama) → ඒ site එකේ handle කරන clients tick කරන්න.
    `MAIN` ඕනේ නැත්නම් Edit → නම වෙනස් කරන්න, නැත්නම් Active untick කරන්න.
-4. **⬆️ Uploader users** → **＋ Add user** → නම, username, channels, **sites**, **clients** → password එක copy කරලා ඒ කෙනාට දෙන්න
-5. **⬇️ Downloader users** → ඒ විදිහටම
+4. **👥 Users** → **＋ Add user** → නම, username, **Access (⬆ Upload / ⬇ Download / ⇅ Both)**, channels, **sites**, **clients** → password එක copy කරලා ඒ කෙනාට දෙන්න
+   * **Both** user කෙනෙකුට එකම username/password එකෙන් portals දෙකටම යන්න පුළුවන් — topbar එකේ **⇄** button එකෙන් මාරු වෙන්න
+5. **📊 DB Status** — Database / Storage connected ද, DB size (500 MB free limit එකෙන් කීයද), files, users, අන්තිම uploads/downloads
 6. Uploader: **Upload Portal** → ① Site → ② Client → ③ Inbound/Outbound → Excel files drag & drop → **Upload**
 7. Downloader: **Download Portal** → Site / Client / Inbound-Outbound තෝරලා **NEW** files download කරනවා
 
 User කෙනෙකුට පේන්නේ / upload කරන්න පුළුවන් **ඒ කෙනාට දීපු sites + clients + channels තුනටම ගැලපෙන** files විතරයි.
 
 ---
+
+## 🗑 Delete කරන්න
+* **User:** Users → Edit → **🗑 Delete**. Upload/download history තියෙන user කෙනෙක් list එකෙන් අයින් වෙලා login කරන්න බැරි වෙනවා, ඒත් files වල "Uploaded by" නම එහෙමම තියෙනවා. Username එක ආයේ පාවිච්චි කරන්න පුළුවන්.
+* **Site / Client:** Edit → **🗑 Delete**. Active files තියෙනවා නම් delete වෙන්නේ නෑ — මුලින් **All files** එකෙන් ඒ files delete කරන්න, නැත්නම් **Active** untick කරලා hide කරන්න. Delete වුණාම users / sites lists වලිනුත් auto අයින් වෙනවා.
 
 ## 🔧 පස්සේ
 
@@ -158,7 +163,8 @@ functions/api/       _middleware.js (login + portal guard)
   upload.js          POST /api/upload                         (uploader)
   my-uploads/        GET / DELETE                             (uploader)
   files/             GET /api/files, /api/files/:id/download  (downloader)
-  admin/             sites · clients · users · files
+  auth/switch.js     Both users: Upload ⇄ Download portal මාරු වෙන්න
+  admin/             sites · clients · accounts (users) · files · status
 schema-console.sql   D1 Console එකට paste කරන්න (comments නැති version)
 schema.sql           එකම schema එක, comments එක්ක (කියවන්න / CLI වලට)
 migrations/          පරණ database එකක් upgrade කරන්න විතරයි

@@ -19,9 +19,9 @@
   <div class="tabs" id="mainTabs">
     <button class="tab neutral" data-v="sites">🏭 Sites</button>
     <button class="tab neutral" data-v="clients">🏢 Clients</button>
-    <button class="tab neutral active" data-v="uploader">⬆️ Uploader users</button>
-    <button class="tab neutral" data-v="downloader">⬇️ Downloader users</button>
+    <button class="tab neutral active" data-v="users">👥 Users</button>
     <button class="tab neutral" data-v="files">📁 All files</button>
+    <button class="tab neutral" data-v="status">📊 DB Status</button>
   </div>
 
   <!-- Sites view -->
@@ -55,12 +55,20 @@
   <!-- Users view -->
   <div class="card" id="usersView">
     <div class="row" style="justify-content:space-between;margin-bottom:12px">
-      <h2 style="margin:0" id="usersTitle"></h2>
+      <div class="row">
+        <h2 style="margin:0">Users</h2>
+        <select id="uFilter" style="width:auto">
+          <option value="">All access</option>
+          <option value="upload">⬆ Upload only</option>
+          <option value="download">⬇ Download only</option>
+          <option value="both">⇅ Both</option>
+        </select>
+      </div>
       <button class="btn" onclick="openCreate()">＋ Add user</button>
     </div>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>Name</th><th>Username</th><th>Sites</th><th>Clients</th><th>Channels</th><th>Status</th><th class="hide-sm">Last login</th><th class="num" id="actHead"></th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Username</th><th>Access</th><th>Sites</th><th>Clients</th><th>Channels</th><th>Status</th><th class="hide-sm">Last login</th><th class="num" title="Files sent / Downloads">Sent / DL</th><th></th></tr></thead>
         <tbody id="users"></tbody>
       </table>
     </div>
@@ -82,15 +90,53 @@
       </table>
     </div>
   </div>
+
+  <!-- DB Status view -->
+  <div id="statusView" style="display:none">
+    <div class="row" style="justify-content:space-between;margin-bottom:12px">
+      <span class="muted small" id="stTime"></span>
+      <button class="btn ghost sm" onclick="loadStatus()">↻ Refresh</button>
+    </div>
+    <div class="stat-grid" id="stHealth"></div>
+    <div class="stat-grid" id="stCounts"></div>
+    <div class="card">
+      <h2>Files by Site / Client</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Site</th><th>Client</th><th class="num">Inbound</th><th class="num">Outbound</th><th class="num">Size</th><th>Last upload</th></tr></thead>
+          <tbody id="stBreakdown"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <h2>⬆ Recent uploads</h2>
+        <div class="table-scroll"><table><tbody id="stUploads"></tbody></table></div>
+      </div>
+      <div class="card">
+        <h2>⬇ Recent downloads</h2>
+        <div class="table-scroll"><table><tbody id="stDownloads"></tbody></table></div>
+      </div>
+    </div>
+    <div class="muted small" id="stSettings" style="margin-bottom:20px"></div>
+  </div>
 </div>
 
-<!-- Create / edit modal -->
+<!-- User modal -->
 <div class="modal-bg" id="modal">
   <form class="modal" id="userForm">
     <h3 id="modalTitle"></h3>
     <div class="field"><label>Full name</label><input type="text" id="mName" required></div>
     <div class="field" id="mUserWrap"><label>Username (for login)</label><input type="text" id="mUser" placeholder="e.g. kasun.p"></div>
     <div class="field"><label id="mPassLbl">Password (min 8 characters)</label><input type="text" id="mPass" autocomplete="new-password"></div>
+    <div class="field">
+      <label>Access</label>
+      <div class="seg" id="mAccess">
+        <label><input type="radio" name="access" value="upload"><span>⬆ Upload</span></label>
+        <label><input type="radio" name="access" value="download"><span>⬇ Download</span></label>
+        <label><input type="radio" name="access" value="both"><span>⇅ Both</span></label>
+      </div>
+    </div>
     <div class="field">
       <label>Channels this user can access</label>
       <div class="checks">
@@ -110,6 +156,7 @@
     </div>
     <div class="field" id="mActiveWrap"><label class="row" style="gap:6px;color:var(--ink)"><input type="checkbox" id="mActive"> Account active</label></div>
     <div class="row" style="justify-content:flex-end">
+      <button type="button" class="btn danger" id="mDelete" style="margin-right:auto" onclick="delUser()">🗑 Delete</button>
       <button type="button" class="btn ghost" onclick="closeModal()">Cancel</button>
       <button class="btn" id="mSave">Save</button>
     </div>
@@ -129,6 +176,7 @@
     </div>
     <div class="field" id="sActiveWrap"><label class="row" style="gap:6px;color:var(--ink)"><input type="checkbox" id="sActive"> Active (shown in upload / download)</label></div>
     <div class="row" style="justify-content:flex-end">
+      <button type="button" class="btn danger" id="sDelete" style="margin-right:auto" onclick="delSite()">🗑 Delete</button>
       <button type="button" class="btn ghost" onclick="$('#sModal').classList.remove('show')">Cancel</button>
       <button class="btn">Save</button>
     </div>
@@ -143,6 +191,7 @@
     <div class="field"><label>Client name</label><input type="text" id="cName" required placeholder="e.g. Häfele India"></div>
     <div class="field" id="cActiveWrap"><label class="row" style="gap:6px;color:var(--ink)"><input type="checkbox" id="cActive"> Active (shown in upload / download)</label></div>
     <div class="row" style="justify-content:flex-end">
+      <button type="button" class="btn danger" id="cDelete" style="margin-right:auto" onclick="delClient()">🗑 Delete</button>
       <button type="button" class="btn ghost" onclick="$('#cModal').classList.remove('show')">Cancel</button>
       <button class="btn">Save</button>
     </div>
@@ -151,67 +200,77 @@
 
 <script src="/assets/app.js"></script>
 <script>
-  let view = "uploader", users = [], editing = null, clients = [], editingClient = null, sites = [], editingSite = null;
+  let view = "users", users = [], editing = null, clients = [], editingClient = null, sites = [], editingSite = null;
+  const ACCESS_LABEL = { upload: "⬆ Upload", download: "⬇ Download", both: "⇅ Both" };
 
   (async () => {
     if (!(await requirePortal("admin"))) return;
     $$("#mainTabs .tab").forEach(t => t.onclick = () => switchView(t.dataset.v));
     await loadClients(); await loadSites();
-    switchView(!sites.length ? "sites" : clients.length ? "uploader" : "clients");
+    switchView(!sites.length ? "sites" : clients.length ? "users" : "clients");
     if (!clients.length) toast("Start by adding your clients (Donaldson, VIP, Häfele …)");
   })();
 
   function switchView(v) {
     view = v;
     $$("#mainTabs .tab").forEach(t => t.classList.toggle("active", t.dataset.v === v));
-    $("#usersView").style.display = (v === "uploader" || v === "downloader") ? "" : "none";
-    $("#filesView").style.display = v === "files" ? "" : "none";
-    $("#clientsView").style.display = v === "clients" ? "" : "none";
-    $("#sitesView").style.display = v === "sites" ? "" : "none";
+    for (const [id, name] of [["usersView", "users"], ["filesView", "files"], ["clientsView", "clients"], ["sitesView", "sites"], ["statusView", "status"]])
+      $("#" + id).style.display = v === name ? "" : "none";
     if (v === "files") return loadFiles();
     if (v === "sites") return loadSites();
     if (v === "clients") return loadClients();
-    $("#usersTitle").textContent = v === "uploader" ? "Uploader users (send files)" : "Downloader users (receive files)";
-    $("#actHead").textContent = v === "uploader" ? "Files sent" : "Downloads";
+    if (v === "status") return loadStatus();
     loadUsers();
   }
 
+  // ---------- users (Upload / Download / Both) ----------
+  $("#uFilter").onchange = renderUsers;
   async function loadUsers() {
-    try {
-      ({ users } = await api(`/api/admin/users?type=${view}`));
-      $("#users").innerHTML = users.length ? users.map(u => `
-        <tr>
-          <td class="name">${esc(u.full_name)}</td>
-          <td>${esc(u.username)}</td>
-          <td>${clientChips(u.sites, "site")}</td>
-          <td>${clientChips(u.clients)}</td>
-          <td>${u.channels.split(",").filter(Boolean).map(c => `<span class="badge ${c}">${c}</span>`).join(" ")}</td>
-          <td>${u.is_active ? '<span class="badge ok">Active</span>' : '<span class="badge off">Disabled</span>'}</td>
-          <td class="hide-sm">${u.last_login_at ? timeAgo(u.last_login_at) : "never"}</td>
-          <td class="num">${u.activity_count}</td>
-          <td class="num"><button class="btn ghost sm" onclick="openEdit(${u.id})">Edit</button></td>
-        </tr>`).join("") : `<tr><td colspan="9" class="empty">No users yet — click “Add user”</td></tr>`;
-    } catch (e) { toast(e.message, "error"); }
+    try { ({ accounts: users } = await api("/api/admin/accounts")); renderUsers(); }
+    catch (e) { toast(e.message, "error"); }
   }
+
+  function renderUsers() {
+    const f = $("#uFilter").value;
+    const list = f ? users.filter(u => u.access === f) : users;
+    $("#users").innerHTML = list.length ? list.map(u => `
+      <tr>
+        <td class="name">${esc(u.full_name)}</td>
+        <td>${esc(u.username)}</td>
+        <td><span class="badge access-${u.access}">${ACCESS_LABEL[u.access]}</span></td>
+        <td>${clientChips(u.sites, "site")}</td>
+        <td>${clientChips(u.clients)}</td>
+        <td>${u.channels.split(",").filter(Boolean).map(c => `<span class="badge ${c}">${c}</span>`).join(" ")}</td>
+        <td>${u.is_active ? '<span class="badge ok">Active</span>' : '<span class="badge off">Disabled</span>'}</td>
+        <td class="hide-sm">${u.last_login_at ? timeAgo(u.last_login_at) : "never"}</td>
+        <td class="num">${u.upload ? u.files_sent : "–"} / ${u.download ? u.downloads : "–"}</td>
+        <td class="num"><button class="btn ghost sm" onclick="openEdit('${esc(u.username)}')">Edit</button></td>
+      </tr>`).join("") : `<tr><td colspan="10" class="empty">${users.length ? "No users with this access" : "No users yet — click “Add user”"}</td></tr>`;
+  }
+
+  const setAccess = (a) => $$("#mAccess input").forEach(r => r.checked = r.value === a);
+  const getAccess = () => ($$("#mAccess input").find(r => r.checked) || {}).value;
 
   function openCreate() {
     editing = null;
-    $("#modalTitle").textContent = `New ${view}`;
+    $("#modalTitle").textContent = "New user";
     $("#mName").value = ""; $("#mUser").value = ""; $("#mPass").value = genPass();
-    $("#mUserWrap").style.display = ""; $("#mActiveWrap").style.display = "none";
+    $("#mUserWrap").style.display = ""; $("#mActiveWrap").style.display = "none"; $("#mDelete").style.display = "none";
     $("#mPassLbl").textContent = "Password (min 8 characters) — copy & give to the user";
+    setAccess("upload");
     $$(".mCh").forEach(c => c.checked = true);
     setClientChecks(""); setSiteChecks("");
     $("#modal").classList.add("show"); $("#mName").focus();
   }
 
-  function openEdit(id) {
-    editing = users.find(u => u.id === id);
-    $("#modalTitle").textContent = `Edit ${view}: ${editing.username}`;
+  function openEdit(username) {
+    editing = users.find(u => u.username === username);
+    $("#modalTitle").textContent = `Edit user: ${editing.username}`;
     $("#mName").value = editing.full_name; $("#mPass").value = "";
-    $("#mUserWrap").style.display = "none"; $("#mActiveWrap").style.display = "";
+    $("#mUserWrap").style.display = "none"; $("#mActiveWrap").style.display = ""; $("#mDelete").style.display = "";
     $("#mPassLbl").textContent = "New password (leave blank to keep current)";
     $("#mActive").checked = !!editing.is_active;
+    setAccess(editing.access);
     const ch = editing.channels.split(",");
     $$(".mCh").forEach(c => c.checked = ch.includes(c.value));
     setClientChecks(editing.clients); setSiteChecks(editing.sites);
@@ -225,20 +284,34 @@
     const channels = $$(".mCh").filter(c => c.checked).map(c => c.value);
     const clientSel = $("#mAllClients").checked ? ["*"] : $$(".mCl").filter(c => c.checked).map(c => c.value);
     const siteSel = $("#mAllSites").checked ? ["*"] : $$(".mSt").filter(c => c.checked).map(c => c.value);
+    const access = getAccess();
     try {
       if (!editing) {
-        await api("/api/admin/users", { method: "POST", body: {
-          type: view, full_name: $("#mName").value, username: $("#mUser").value, password: $("#mPass").value, channels, clients: clientSel, sites: siteSel } });
+        await api("/api/admin/accounts", { method: "POST", body: {
+          full_name: $("#mName").value, username: $("#mUser").value, password: $("#mPass").value,
+          access, channels, clients: clientSel, sites: siteSel } });
         toast(`User created — password: ${$("#mPass").value}`, "ok");
       } else {
-        const body = { full_name: $("#mName").value, channels, clients: clientSel, sites: siteSel, is_active: $("#mActive").checked };
+        if (editing.access !== access && access !== "both" &&
+            !confirm(`Remove ${editing.access === "both" ? (access === "upload" ? "Download" : "Upload") : ACCESS_LABEL[editing.access]} access from ${editing.username}?`)) return;
+        const body = { full_name: $("#mName").value, access, channels, clients: clientSel, sites: siteSel, is_active: $("#mActive").checked };
         if ($("#mPass").value) body.password = $("#mPass").value;
-        await api(`/api/admin/users/${view}/${editing.id}`, { method: "PATCH", body });
+        await api(`/api/admin/accounts/${encodeURIComponent(editing.username)}`, { method: "PATCH", body });
         toast("Saved", "ok");
       }
       closeModal(); loadUsers();
     } catch (err) { toast(err.message, "error"); }
   };
+
+  async function delUser() {
+    if (!editing) return;
+    if (!confirm(`Delete user "${editing.full_name}" (${editing.username})?\n\nThey will no longer be able to log in. Files they already sent stay.`)) return;
+    try {
+      const r = await api(`/api/admin/accounts/${encodeURIComponent(editing.username)}`, { method: "DELETE" });
+      toast(r.archived ? "User deleted — name kept in file history" : "User deleted", "ok");
+      closeModal(); loadUsers();
+    } catch (err) { toast(err.message, "error"); }
+  }
 
   function genPass() {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
@@ -266,6 +339,13 @@
     } catch (e) { toast(e.message, "error"); }
   }
 
+  async function delFile(id, btn) {
+    if (!confirm("Permanently delete this file?")) return;
+    btn.disabled = true;
+    try { await api(`/api/admin/files/${id}`, { method: "DELETE" }); toast("Deleted", "ok"); loadFiles(); }
+    catch (e) { toast(e.message, "error"); btn.disabled = false; }
+  }
+
   // ---------- clients ----------
   async function loadClients() {
     try {
@@ -290,6 +370,7 @@
     $("#cTitle").textContent = editingClient ? `Edit client: ${editingClient.code}` : "New client";
     $("#cCodeWrap").style.display = editingClient ? "none" : "";
     $("#cActiveWrap").style.display = editingClient ? "" : "none";
+    $("#cDelete").style.display = editingClient ? "" : "none";
     $("#cCode").value = ""; $("#cName").value = editingClient ? editingClient.name : "";
     $("#cActive").checked = editingClient ? !!editingClient.is_active : true;
     $("#cModal").classList.add("show"); (editingClient ? $("#cName") : $("#cCode")).focus();
@@ -307,6 +388,16 @@
       $("#cModal").classList.remove("show"); loadClients();
     } catch (err) { toast(err.message, "error"); }
   };
+
+  async function delClient() {
+    if (!editingClient) return;
+    if (!confirm(`Delete client "${editingClient.name}" (${editingClient.code})?\n\nIt will also be removed from every user's and site's client list.`)) return;
+    try {
+      await api(`/api/admin/clients/${encodeURIComponent(editingClient.code)}`, { method: "DELETE" });
+      toast("Client deleted", "ok");
+      $("#cModal").classList.remove("show"); loadClients(); loadSites();
+    } catch (err) { toast(err.message, "error"); }
+  }
 
   function clientChips(s, kind = "") {
     if (s === "*") return `<span class="client-chip ${kind}">ALL</span>`;
@@ -338,6 +429,7 @@
     $("#sTitle").textContent = editingSite ? `Edit site: ${editingSite.code}` : "New site";
     $("#sCodeWrap").style.display = editingSite ? "none" : "";
     $("#sActiveWrap").style.display = editingSite ? "" : "none";
+    $("#sDelete").style.display = editingSite ? "" : "none";
     $("#sCode").value = ""; $("#sName").value = editingSite ? editingSite.name : "";
     $("#sActive").checked = editingSite ? !!editingSite.is_active : true;
     const sel = editingSite ? editingSite.clients : "*";
@@ -359,6 +451,16 @@
     } catch (err) { toast(err.message, "error"); }
   };
 
+  async function delSite() {
+    if (!editingSite) return;
+    if (!confirm(`Delete site "${editingSite.name}" (${editingSite.code})?\n\nIt will also be removed from every user's site list.`)) return;
+    try {
+      await api(`/api/admin/sites/${encodeURIComponent(editingSite.code)}`, { method: "DELETE" });
+      toast("Site deleted", "ok");
+      $("#sModal").classList.remove("show"); loadSites();
+    } catch (err) { toast(err.message, "error"); }
+  }
+
   // generic checkbox grid with an "All" toggle
   function renderChecks(gridSel, cls, items, selected, allSel) {
     const all = selected === "*", sel = String(selected || "").split(",");
@@ -370,26 +472,46 @@
     $(allSel).onchange = sync; sync();
   }
   function setSiteChecks(s) { renderChecks("#mSites", "mSt", sites, s, "#mAllSites"); }
+  function setClientChecks(s) { renderChecks("#mClients", "mCl", clients, s, "#mAllClients"); }
 
-  function setClientChecks(s) {
-    const all = s === "*", sel = String(s || "").split(",");
-    $("#mClients").innerHTML = clients.length ? clients.map(c =>
-      `<label><input type="checkbox" class="mCl" value="${esc(c.code)}" ${all || sel.includes(c.code) ? "checked" : ""}> ${esc(c.name)}${c.is_active ? "" : " (disabled)"}</label>`).join("")
-      : '<span class="muted small">No clients yet — add them in the Clients tab first</span>';
-    $("#mAllClients").checked = all;
-    toggleAllClients();
-  }
-  function toggleAllClients() {
-    const all = $("#mAllClients").checked;
-    $$(".mCl").forEach(c => { c.disabled = all; if (all) c.checked = true; });
-  }
-  $("#mAllClients").onchange = toggleAllClients;
-
-  async function delFile(id, btn) {
-    if (!confirm("Permanently delete this file?")) return;
-    btn.disabled = true;
-    try { await api(`/api/admin/files/${id}`, { method: "DELETE" }); toast("Deleted", "ok"); loadFiles(); }
-    catch (e) { toast(e.message, "error"); btn.disabled = false; }
+  // ---------- DB status ----------
+  async function loadStatus() {
+    try {
+      const s = await api("/api/admin/status");
+      const c = s.counts;
+      const pct = s.db.size_bytes != null ? Math.min(100, s.db.size_bytes / s.db.limit_bytes * 100) : null;
+      const health = (ok, label, detail) =>
+        `<div class="stat ${ok ? "ok" : "bad"}"><div class="k">${label}</div><div class="v">${ok ? "● Connected" : "● Error"}</div><div class="muted small">${detail}</div></div>`;
+      $("#stHealth").innerHTML =
+        health(s.db.ok, "Database (D1)", `${s.db.ms} ms response`) +
+        health(s.r2.ok, "File storage (R2)", s.r2.ok ? `${s.r2.ms} ms response` : esc(s.r2.error)) +
+        `<div class="stat"><div class="k">Database size</div><div class="v">${s.db.size_bytes != null ? fmtSize(s.db.size_bytes) : "—"}</div>
+           ${pct != null ? `<div class="bar"><div style="width:${Math.max(pct, 0.5)}%"></div></div><div class="muted small">${pct.toFixed(2)}% of ${fmtSize(s.db.limit_bytes)} (Free plan limit)</div>` : ""}</div>` +
+        `<div class="stat"><div class="k">Excel files stored (R2)</div><div class="v">${fmtSize(c.storage_bytes)}</div><div class="muted small">${c.files} file(s) · R2 free: 10 GB</div></div>`;
+      const box = (label, value, sub = "") => `<div class="stat"><div class="k">${label}</div><div class="v">${value}</div><div class="muted small">${sub}</div></div>`;
+      $("#stCounts").innerHTML =
+        box("🏭 Sites", c.sites_active, `${c.sites_total} total`) +
+        box("🏢 Clients", c.clients_active, `${c.clients_total} total`) +
+        box("👥 Users", c.users_total, `⬆ ${c.upload_users} upload · ⬇ ${c.download_users} download`) +
+        box("📁 Files", c.files, `⬇ ${c.files_inbound} inbound · ⬆ ${c.files_outbound} outbound`) +
+        box("🆕 Not downloaded yet", c.files_not_downloaded, "files waiting") +
+        box("Last 24 h", `${c.uploads_24h} ⬆ / ${c.downloads_24h} ⬇`, "uploads / downloads") +
+        box("Downloads (all time)", c.downloads_total, c.last_download ? `last ${timeAgo(c.last_download)}` : "none yet") +
+        box("Logged-in users", c.sessions_active, c.last_upload ? `last upload ${timeAgo(c.last_upload)}` : "no uploads yet");
+      $("#stBreakdown").innerHTML = s.breakdown.length ? s.breakdown.map(r => `
+        <tr><td><span class="client-chip site" title="${esc(r.site_name)}">${esc(r.site_code)}</span> ${esc(r.site_name)}</td>
+            <td><span class="client-chip" title="${esc(r.client_name)}">${esc(r.client_code)}</span> ${esc(r.client_name)}</td>
+            <td class="num">${r.inbound}</td><td class="num">${r.outbound}</td><td class="num">${fmtSize(r.bytes)}</td>
+            <td>${fmtDate(r.last_upload)}</td></tr>`).join("") : `<tr><td colspan="6" class="empty">No files yet</td></tr>`;
+      const act = (rows, tsKey) => rows.length ? rows.map(r => `
+        <tr><td class="name">📗 ${esc(r.original_name)}<div class="muted small">${esc(r.site_code)} / ${esc(r.client_code)} / ${r.channel}</div></td>
+            <td>${esc(r.by_name)}</td><td class="muted small" title="${fmtDate(r[tsKey])}">${timeAgo(r[tsKey])}</td></tr>`).join("")
+        : `<tr><td class="empty">Nothing yet</td></tr>`;
+      $("#stUploads").innerHTML = act(s.recent_uploads, "uploaded_at");
+      $("#stDownloads").innerHTML = act(s.recent_downloads, "downloaded_at");
+      $("#stSettings").textContent = `Settings: max ${s.settings.max_file_mb} MB per file · allowed .${s.settings.allowed_ext.split(",").join(", .")} · login lasts ${s.settings.session_hours} h`;
+      $("#stTime").textContent = "Checked " + new Date().toLocaleTimeString();
+    } catch (e) { toast(e.message, "error"); }
   }
 </script>
 </body>

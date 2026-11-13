@@ -1,4 +1,7 @@
-import { json, err, verifyPassword, timingSafeEqual, randomToken, sha256Hex, sessionCookie, USER_TABLE } from "../../_lib/util.js";
+import { json, err, verifyPassword, timingSafeEqual, USER_TABLE } from "../../_lib/util.js";
+import { findRow, startSession, OTHER } from "../../_lib/accounts.js";
+
+const PORTAL_NAME = { uploader: "Upload", downloader: "Download" };
 
 export async function onRequestPost({ request, env }) {
   let body;
@@ -19,27 +22,23 @@ export async function onRequestPost({ request, env }) {
     }
     userId = 0;
   } else {
-    const table = USER_TABLE[portal];
-    const u = await env.DB.prepare(`SELECT id, password_hash, is_active FROM ${table} WHERE username = ?`)
-      .bind(username).first();
+    const u = await findRow(env, portal, username);
     const ok = u && (await verifyPassword(password, u.password_hash));
-    if (!ok) { await sleep(600); return err("Wrong username or password", 401); }
+    if (!ok) {
+      // Right password but wrong portal? Tell them which portal to use.
+      const other = await findRow(env, OTHER[portal], username);
+      if (other && other.is_active && (await verifyPassword(password, other.password_hash)))
+        return err(`This account has ${PORTAL_NAME[OTHER[portal]]} access only — choose the ${PORTAL_NAME[OTHER[portal]]} Portal.`, 403);
+      await sleep(600);
+      return err("Wrong username or password", 401);
+    }
     if (!u.is_active) return err("This account is disabled. Contact the admin.", 403);
     userId = u.id;
-    await env.DB.prepare(`UPDATE ${table} SET last_login_at = datetime('now') WHERE id = ?`).bind(userId).run();
+    await env.DB.prepare(`UPDATE ${USER_TABLE[portal]} SET last_login_at = datetime('now') WHERE id = ?`).bind(userId).run();
   }
 
-  const hours = Number(env.SESSION_HOURS || 12);
-  const token = randomToken();
-  await env.DB.batch([
-    env.DB.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')"),
-    env.DB.prepare(`INSERT INTO sessions (token_hash, user_type, user_id, expires_at)
-                    VALUES (?, ?, ?, datetime('now', ?))`)
-      .bind(await sha256Hex(token), portal, userId, `+${hours} hours`),
-  ]);
-
-  const secure = new URL(request.url).protocol === "https:";
-  return json({ ok: true, portal }, 200, { "set-cookie": sessionCookie(token, hours, secure) });
+  const cookie = await startSession(env, request, portal, userId);
+  return json({ ok: true, portal }, 200, { "set-cookie": cookie });
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
