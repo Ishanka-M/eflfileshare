@@ -32,7 +32,8 @@ Upload කරන අයට සහ Download කරන අයට **වෙන ව�
 1. https://github.com/new → Name: `efl-fileshare` → **Private** → **Create repository**
 2. **"uploading an existing file"** link එක click කරන්න
 3. Zip එක extract කරලා, **`efl-fileshare` folder එක ඇතුළේ තියෙන හැම file/folder එකක්ම** drag & drop කරන්න
-   (`functions`, `public`, `migrations`, `schema.sql`, `package.json`, `README.md` …)
+   (`functions`, `public`, `migrations`, `schema-console.sql`, `schema.sql`, `README.md` …)
+   ⚠️ `package.json` / `package-lock.json` / `vercel.json` / `api` / `lib` වගේ files repo එකේ තියෙන්න එපා (ඒවා Vercel version එකේ)
 4. **Commit changes**
 
 ---
@@ -43,7 +44,8 @@ Upload කරන අයට සහ Download කරන අයට **වෙන ව�
 2. වම් menu එකේ **Storage & Databases** → **D1 SQL Database** → **Create**
 3. Name: `efl-fileshare-db` → **Create**
 4. හැදුණු database එක open කරලා **Console** tab එකට යන්න
-5. **`schema.sql`** file එක Notepad එකෙන් open කරලා **සම්පූර්ණයෙන්ම copy** කරලා Console එකට paste කරන්න → **Execute**
+5. **`schema-console.sql`** file එක Notepad එකෙන් open කරලා **සම්පූර්ණයෙන්ම copy** කරලා Console එකට paste කරන්න → **Execute**
+   (`schema.sql` එක නෙවෙයි — ඒකේ `--` comments තියෙන නිසා Console එකේ "No SQL statements detected" එනවා)
 
 ✔ Tables, clients 4 (Donaldson, VIP, Häfele, Helen Kaminski) සහ `MAIN` කියලා default site එකක් හැදෙනවා.
 
@@ -136,11 +138,11 @@ User කෙනෙකුට පේන්නේ / upload කරන්න පුළ
 | `ADMIN_PASSWORD secret is not set` | පියවර 6 → Secret දාලා **Retry deployment** |
 | `no such table` | පියවර 2 schema.sql එක run වෙලා නැහැ |
 | Upload එකේ `… FILES …` error | R2 bucket binding (`FILES`) නැහැ |
+| Build log එකේ `npm ci` / `package-lock.json` error | Repo එකෙන් `package.json` සහ `package-lock.json` delete කරන්න → auto redeploy |
 | Pages එකේ 404 | Build output directory එක `public` නැහැ → Settings → Builds → වෙනස් කරලා Retry |
 
 ## 🧪 Local test (developers only)
 ```bash
-npm install
 cp wrangler.toml.example wrangler.toml
 echo 'ADMIN_PASSWORD="test-admin-123"' > .dev.vars
 npx wrangler d1 execute efl-fileshare-db --local --file=schema.sql
@@ -157,7 +159,8 @@ functions/api/       _middleware.js (login + portal guard)
   my-uploads/        GET / DELETE                             (uploader)
   files/             GET /api/files, /api/files/:id/download  (downloader)
   admin/             sites · clients · users · files
-schema.sql           D1 Console එකේ එක පාරක් run කරන්න (fresh install)
+schema-console.sql   D1 Console එකට paste කරන්න (comments නැති version)
+schema.sql           එකම schema එක, comments එක්ක (කියවන්න / CLI වලට)
 migrations/          පරණ database එකක් upgrade කරන්න විතරයි
 wrangler.toml.example  local test / CLI වලට විතරයි
 ```

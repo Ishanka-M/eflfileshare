@@ -1,0 +1,15 @@
+CREATE TABLE IF NOT EXISTS clients ( code TEXT PRIMARY KEY, name TEXT NOT NULL, is_active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')) );
+CREATE TABLE IF NOT EXISTS sites ( code TEXT PRIMARY KEY, name TEXT NOT NULL, clients TEXT NOT NULL DEFAULT '*', is_active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')) );
+CREATE TABLE IF NOT EXISTS uploaders ( id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE COLLATE NOCASE, full_name TEXT NOT NULL, password_hash TEXT NOT NULL, channels TEXT NOT NULL DEFAULT 'inbound,outbound', clients TEXT NOT NULL DEFAULT '', sites TEXT NOT NULL DEFAULT '', is_active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')), last_login_at TEXT );
+CREATE TABLE IF NOT EXISTS downloaders ( id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE COLLATE NOCASE, full_name TEXT NOT NULL, password_hash TEXT NOT NULL, channels TEXT NOT NULL DEFAULT 'inbound,outbound', clients TEXT NOT NULL DEFAULT '', sites TEXT NOT NULL DEFAULT '', is_active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')), last_login_at TEXT );
+CREATE TABLE IF NOT EXISTS sessions ( token_hash TEXT PRIMARY KEY, user_type TEXT NOT NULL CHECK (user_type IN ('uploader','downloader','admin')), user_id INTEGER NOT NULL, expires_at TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')) );
+CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
+CREATE TABLE IF NOT EXISTS files ( id TEXT PRIMARY KEY, site_code TEXT NOT NULL REFERENCES sites(code), client_code TEXT NOT NULL REFERENCES clients(code), channel TEXT NOT NULL CHECK (channel IN ('inbound','outbound')), original_name TEXT NOT NULL, r2_key TEXT NOT NULL UNIQUE, content_type TEXT, size_bytes INTEGER NOT NULL, note TEXT, uploaded_by INTEGER NOT NULL REFERENCES uploaders(id), uploaded_at TEXT NOT NULL DEFAULT (datetime('now')), is_deleted INTEGER NOT NULL DEFAULT 0 );
+CREATE INDEX IF NOT EXISTS idx_files_channel ON files(channel, is_deleted, uploaded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_files_client ON files(client_code, channel, is_deleted, uploaded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_files_site ON files(site_code, client_code, channel, is_deleted, uploaded_at DESC);
+CREATE TABLE IF NOT EXISTS download_log ( id INTEGER PRIMARY KEY AUTOINCREMENT, file_id TEXT NOT NULL REFERENCES files(id), downloader_id INTEGER NOT NULL REFERENCES downloaders(id), downloaded_at TEXT NOT NULL DEFAULT (datetime('now')) );
+CREATE INDEX IF NOT EXISTS idx_dl_file ON download_log(file_id);
+CREATE INDEX IF NOT EXISTS idx_dl_user ON download_log(downloader_id, file_id);
+INSERT OR IGNORE INTO clients (code, name) VALUES ('DONALDSON', 'Donaldson'), ('VIP', 'VIP Industries'), ('HAFELE', 'Häfele India'), ('HELENK', 'Helen Kaminski');
+INSERT OR IGNORE INTO sites (code, name) VALUES ('MAIN', 'Main Warehouse');
