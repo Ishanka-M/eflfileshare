@@ -4,19 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EFL File Share — Login</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#1d3c78">
 <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
 <div class="login-shell">
   <div class="login-card">
-    <h1>📦 EFL File Share</h1>
-    <div class="muted small">Inbound / Outbound Excel exchange</div>
-
-    <div class="portal-switch" id="portalSwitch">
-      <button type="button" data-portal="uploader" class="active"><span class="ic">⬆️</span>Upload Portal</button>
-      <button type="button" data-portal="downloader"><span class="ic">⬇️</span>Download Portal</button>
-    </div>
-    <div id="adminBanner" class="badge new" style="display:none;margin-bottom:12px">Admin login</div>
+    <h1><img src="/favicon.svg" alt="">EFL File Share</h1>
+    <div class="muted small" style="margin-bottom:20px">Inbound / Outbound Excel exchange</div>
 
     <form id="loginForm" autocomplete="on">
       <div class="field">
@@ -29,26 +27,13 @@
       </div>
       <button class="btn" style="width:100%" id="loginBtn">Log in</button>
     </form>
-    <a class="admin-link" id="adminToggle">Admin login</a>
+    <div class="login-hint">You'll be taken to the Upload or Download portal automatically.</div>
   </div>
 </div>
 
 <script src="/assets/app.js"></script>
 <script>
-  let portal = localStorage.getItem("efl_fs_portal") || "uploader";
   const dest = { uploader: "/upload.html", downloader: "/download.html", admin: "/admin.html" };
-
-  function setPortal(p) {
-    portal = p;
-    $$("#portalSwitch button").forEach(b => b.classList.toggle("active", b.dataset.portal === p));
-    $("#portalSwitch").style.display = p === "admin" ? "none" : "";
-    $("#adminBanner").style.display = p === "admin" ? "inline-block" : "none";
-    $("#adminToggle").textContent = p === "admin" ? "← Back to user login" : "Admin login";
-    if (p === "admin") $("#username").value = "admin";
-  }
-  $$("#portalSwitch button").forEach(b => b.onclick = () => setPortal(b.dataset.portal));
-  $("#adminToggle").onclick = () => setPortal(portal === "admin" ? "uploader" : "admin");
-  setPortal(portal === "admin" ? "uploader" : portal);
 
   // Already logged in? go straight to the portal
   api("/api/auth/me").then(me => { if (me.user) location.href = dest[me.user.type]; }).catch(() => {});
@@ -56,10 +41,12 @@
   $("#loginForm").onsubmit = async (e) => {
     e.preventDefault();
     const btn = $("#loginBtn"); btn.disabled = true; btn.textContent = "Checking…";
+    let prefer = "";
+    try { prefer = localStorage.getItem("efl_fs_last_portal:" + $("#username").value.trim().toLowerCase()) || ""; } catch {}
     try {
-      await api("/api/auth/login", { method: "POST", body: { portal, username: $("#username").value, password: $("#password").value } });
-      if (portal !== "admin") localStorage.setItem("efl_fs_portal", portal);
-      location.href = dest[portal];
+      // the server decides: Upload, Download, Both (→ last used portal) or Admin
+      const r = await api("/api/auth/login", { method: "POST", body: { username: $("#username").value, password: $("#password").value, prefer } });
+      location.href = dest[r.portal];
     } catch (err) {
       toast(err.message, "error");
       btn.disabled = false; btn.textContent = "Log in";

@@ -115,8 +115,9 @@ Upload කරන අයට සහ Download කරන අයට **වෙන ව�
 4. **👥 Users** → **＋ Add user** → නම, username, **Access (⬆ Upload / ⬇ Download / ⇅ Both)**, channels, **sites**, **clients** → password එක copy කරලා ඒ කෙනාට දෙන්න
    * **Both** user කෙනෙකුට එකම username/password එකෙන් portals දෙකටම යන්න පුළුවන් — topbar එකේ **⇄** button එකෙන් මාරු වෙන්න
 5. **📊 DB Status** — Database / Storage connected ද, DB size (500 MB free limit එකෙන් කීයද), files, users, අන්තිම uploads/downloads
-6. Uploader: **Upload Portal** → ① Site → ② Client → ③ Inbound/Outbound → Excel files drag & drop → **Upload**
-7. Downloader: **Download Portal** → Site / Client / Inbound-Outbound තෝරලා **NEW** files download කරනවා
+6. **Login:** username + password දුන්නාම system එකම හරි portal එකට යවනවා — Upload user → Upload Portal, Download user → Download Portal, Both → අන්තිමට පාවිච්චි කරපු portal එක (⇄ button එකෙන් මාරු වෙන්න). Admin: username `admin` + `ADMIN_PASSWORD`.
+7. Uploader: **Upload Portal** → ① Site → ② Client → ③ Inbound/Outbound → Excel files drag & drop → **Upload**
+8. Downloader: **Download Portal** → Site / Client / Inbound-Outbound තෝරලා **NEW** files download කරනවා
 
 User කෙනෙකුට පේන්නේ / upload කරන්න පුළුවන් **ඒ කෙනාට දීපු sites + clients + channels තුනටම ගැලපෙන** files විතරයි.
 

@@ -45,6 +45,7 @@ export async function onRequestPost({ request, env }) {
   const sites = normalizeSites(b.sites);
 
   if (!/^[a-z0-9._-]{3,32}$/.test(username)) return err("Username: 3–32 chars, letters/numbers/. _ - only");
+  if (username === "admin") return err(`"admin" is reserved for the admin login — choose another username`);
   if (!full_name) return err("Full name is required");
   if (password.length < 8) return err("Password must be at least 8 characters");
   if (!types) return err("Choose access: Upload, Download or Both");

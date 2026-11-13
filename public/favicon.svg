@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1d3c78"/>
+      <stop offset="1" stop-color="#2b5bb8"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <!-- spreadsheet sheet -->
+  <rect x="11" y="10" width="32" height="40" rx="4" fill="#ffffff"/>
+  <rect x="11" y="10" width="32" height="10" rx="4" fill="#0f8a6a"/>
+  <rect x="11" y="16" width="32" height="4" fill="#0f8a6a"/>
+  <path d="M11 30h32M11 40h32M24 20v30" stroke="#b9c7e2" stroke-width="2.4"/>
+  <!-- in / out exchange badge -->
+  <circle cx="45" cy="45" r="14" fill="#c4620f" stroke="#ffffff" stroke-width="3"/>
+  <path d="M40 50V39m0 0-4 4m4-4 4 4" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M50 40v11m0 0-4-4m4 4 4-4" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

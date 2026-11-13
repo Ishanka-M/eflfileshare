@@ -21,6 +21,7 @@ async function requirePortal(type) {
   try {
     const me = await api("/api/auth/me");
     if (!me.user || me.user.type !== type) { location.href = "/"; return null; }
+    if (type !== "admin") try { localStorage.setItem("efl_fs_last_portal:" + me.user.username.toLowerCase(), type); } catch {}
     const who = $("#who");
     if (who) who.textContent = me.user.full_name + (me.user.type !== "admin" ? ` (${me.user.username})` : "");
     const sw = $("#switchBtn");

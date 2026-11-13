@@ -1,44 +1,50 @@
+// POST /api/auth/login {username, password, prefer?}
+// The portal is chosen automatically from the account:
+//   username "admin" + ADMIN_PASSWORD  → Admin
+//   Upload access only                 → Upload portal
+//   Download access only               → Download portal
+//   Both                               → `prefer` (last portal used on this browser), else Upload
 import { json, err, verifyPassword, timingSafeEqual, USER_TABLE } from "../../_lib/util.js";
-import { findRow, startSession, OTHER } from "../../_lib/accounts.js";
-
-const PORTAL_NAME = { uploader: "Upload", downloader: "Download" };
+import { findRow, startSession, TYPES } from "../../_lib/accounts.js";
 
 export async function onRequestPost({ request, env }) {
   let body;
   try { body = await request.json(); } catch { return err("Invalid request"); }
 
-  const portal = String(body.portal || "");
   const username = String(body.username || "").trim();
   const password = String(body.password || "");
-  if (!["uploader", "downloader", "admin"].includes(portal)) return err("Unknown portal");
-  if (!password) return err("Password required");
+  if (!username || !password) return err("Enter your username and password");
 
-  let userId;
-  if (portal === "admin") {
+  // ---- Admin ----
+  if (username.toLowerCase() === "admin") {
     if (!env.ADMIN_PASSWORD) return err("ADMIN_PASSWORD secret is not set on the server", 500);
-    if (username.toLowerCase() !== "admin" || !timingSafeEqual(password, env.ADMIN_PASSWORD)) {
-      await sleep(600);
-      return err("Wrong username or password", 401);
-    }
-    userId = 0;
-  } else {
-    const u = await findRow(env, portal, username);
-    const ok = u && (await verifyPassword(password, u.password_hash));
-    if (!ok) {
-      // Right password but wrong portal? Tell them which portal to use.
-      const other = await findRow(env, OTHER[portal], username);
-      if (other && other.is_active && (await verifyPassword(password, other.password_hash)))
-        return err(`This account has ${PORTAL_NAME[OTHER[portal]]} access only — choose the ${PORTAL_NAME[OTHER[portal]]} Portal.`, 403);
-      await sleep(600);
-      return err("Wrong username or password", 401);
-    }
-    if (!u.is_active) return err("This account is disabled. Contact the admin.", 403);
-    userId = u.id;
-    await env.DB.prepare(`UPDATE ${USER_TABLE[portal]} SET last_login_at = datetime('now') WHERE id = ?`).bind(userId).run();
+    if (!timingSafeEqual(password, env.ADMIN_PASSWORD)) { await sleep(600); return err("Wrong username or password", 401); }
+    const cookie = await startSession(env, request, "admin", 0);
+    return json({ ok: true, portal: "admin", access: "admin" }, 200, { "set-cookie": cookie });
   }
 
-  const cookie = await startSession(env, request, portal, userId);
-  return json({ ok: true, portal }, 200, { "set-cookie": cookie });
+  // ---- Users: check both access tables ----
+  const valid = [];
+  let disabled = false;
+  for (const t of TYPES) {
+    const row = await findRow(env, t, username);
+    if (row && (await verifyPassword(password, row.password_hash))) {
+      if (row.is_active) valid.push({ type: t, row }); else disabled = true;
+    }
+  }
+  if (!valid.length) {
+    if (disabled) return err("This account is disabled. Contact the admin.", 403);
+    await sleep(600);
+    return err("Wrong username or password", 401);
+  }
+
+  const prefer = String(body.prefer || "");
+  const pick = valid.find((v) => v.type === prefer) || valid.find((v) => v.type === "uploader") || valid[0];
+  await env.DB.prepare(`UPDATE ${USER_TABLE[pick.type]} SET last_login_at = datetime('now') WHERE id = ?`).bind(pick.row.id).run();
+
+  const cookie = await startSession(env, request, pick.type, pick.row.id);
+  const access = valid.length > 1 ? "both" : pick.type === "uploader" ? "upload" : "download";
+  return json({ ok: true, portal: pick.type, access }, 200, { "set-cookie": cookie });
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
